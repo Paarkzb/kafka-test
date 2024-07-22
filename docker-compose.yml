@@ -1,0 +1,38 @@
+services:
+  server:
+    depends_on:
+      - micro-postgres
+    build:
+      context: .
+    container_name: micro-server
+    hostname: micro-server
+    networks:
+      - micro-net
+    ports:
+      - 8090:8090
+    volumes:
+      - micro-server-volume:/app
+    deploy:
+      restart_policy:
+        condition: on-failure
+  micro-postgres:
+    image: postgres
+    container_name: micro-postgres
+    hostname: micro-postgres
+    networks:
+      - micro-net
+    ports:
+      - 5490:5490
+    volumes:
+      - micro-postgres-volume:/var/lib/postgresql/data
+    deploy:
+      restart_policy:
+        condition: on-failure
+
+volumes:
+  micro-server-volume:
+  micro-postgres-volume:
+
+networks:
+  micro-net:
+    driver: bridge
