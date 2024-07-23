@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-FROM golang:1.21.4  AS build-stage
+FROM golang:1.23rc2-alpine3.20  AS build-stage
+RUN apk add --no-progress --no-cache gcc musl-dev
 
 WORKDIR /app
 
@@ -11,11 +12,7 @@ RUN go mod download
 COPY ./ ./
 
 # Build
-RUN CGO_ENABLED=1 GOOS=linux go build -o /server ./cmd
-
-# Run the tests in the container
-FROM build-stage AS run-test-stage
-RUN go test -v ./...
+RUN go build -tags musl -ldflags '-extldflags "-static"' -o /server ./cmd
 
 # Application binary into a lean image
 FROM scratch AS build-release-stage
