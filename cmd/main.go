@@ -10,7 +10,7 @@ import (
 
 func main() {
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
-		"bootstrap.servers": "localhost:9092",
+		"bootstrap.servers": "micro-kafka:9090",
 		"acks":              "all",
 	})
 

@@ -7,12 +7,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/confluentinc/confluent-kafka-go/kafka"
+	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 )
 
 func main() {
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": "localhost:9092",
+		"bootstrap.servers": "localhost:9090",
 
 		"group.id":          "kafka-go-getting-started",
 		"auto.offset.reset": "earliest",
