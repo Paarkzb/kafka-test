@@ -1,6 +1,48 @@
 version: '3'
 services:
-  server:
+  micro-postgres:
+    image: postgres
+    container_name: micro-postgres
+    hostname: micro-postgres
+    networks:
+      - micro-net
+    ports:
+      - "5490:5490"
+    volumes:
+      - micro-postgres-volume:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=${PGPASSWORD:?database password not set}
+    deploy:
+      restart_policy:
+        condition: on-failure
+  micro-zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.2
+    hostname: micro-zookeeper
+    container_name: micro-zookeeper
+    ports:
+      - "2181:2181"
+    environment:
+      - ZOOKEEPER_CLIENT_PORT=2181
+    networks:
+      - micro-net
+  micro-kafka:
+    image: confluentinc/cp-kafka:7.6.2
+    hostname: micro-kafka
+    container_name: micro-kafka
+    ports:
+      - "9092:9092"
+    environment:
+      - KAFKA_ZOOKEEPER_CONNECT=micro-zookeeper:2181
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://micro-kafka:9092
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      # - KAFKA_BROKER_ID=1
+      - KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR=1
+      - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
+    networks:
+      - micro-net
+    depends_on:
+      - micro-zookeeper
+  micro-server:
     depends_on:
       - micro-postgres
       - micro-kafka
@@ -24,47 +66,24 @@ services:
     deploy:
       restart_policy:
         condition: on-failure
-  micro-postgres:
-    image: postgres
-    container_name: micro-postgres
-    hostname: micro-postgres
+  micro-consumer:
+    build: 
+      context: internal/consumer
+    container_name: micro-consumer
+    hostname: micro-consumer
     networks:
       - micro-net
     ports:
-      - "5490:5490"
+      - "8091:8091"
     volumes:
-      - micro-postgres-volume:/var/lib/postgresql/data
-    environment:
-      - POSTGRES_PASSWORD=${PGPASSWORD:?database password not set}
+      - micro-consumer-volume:/app
     deploy:
       restart_policy:
         condition: on-failure
-  micro-zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.2
-    hostname: micro-zookeeper
-    container_name: micro-zookeeper
-    ports:
-      - "2190:2190"
-    environment:
-      - ZOOKEEPER_CLIENT_PORT=2190
-    networks:
-      - micro-net
-  micro-kafka:
-    image: confluentinc/cp-kafka:7.6.2
-    hostname: micro-kafka
-    container_name: micro-kafka
-    ports:
-      - "9090:9090"
-    environment:
-      - KAFKA_ZOOKEEPER_CONNECT=micro-zookeeper:2190
-      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://micro-kafka:9090
-    networks:
-      - micro-net
-    depends_on:
-      - micro-zookeeper
 
 
 volumes:
+  micro-consumer-volume:
   micro-server-volume:
   micro-postgres-volume:
 
