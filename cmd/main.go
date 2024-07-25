@@ -2,12 +2,10 @@ package main
 
 import (
 	"log"
-	"net/http"
+	"math/rand"
 	"os"
-	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
-	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -35,43 +33,27 @@ func main() {
 		}
 	}()
 
-	// users := [...]string{"eabara", "jsmith", "sgarcia", "jbernard", "htanaka", "awalther"}
-	// items := [...]string{"book", "alarm clock", "t-shirts", "gift card", "batteries"}
-	// topic := "purchases"
+	users := [...]string{"eabara", "jsmith", "sgarcia", "jbernard", "htanaka", "awalther"}
+	items := [...]string{"book", "alarm clock", "t-shirts", "gift card", "batteries"}
+	topic := "purchases"
 
-	// for n := 0; n < 10; n++ {
-	// 	key := users[rand.Intn(len(users))]
-	// 	data := items[rand.Intn(len(items))]
-	// 	p.Produce(&kafka.Message{
-	// 		TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-	// 		Key:            []byte(key),
-	// 		Value:          []byte(data),
-	// 	}, nil)
-	// }
-
-	mux := gin.Default()
-
-	httpServer := &http.Server{
-		Addr:           ":8090",
-		Handler:        mux,
-		MaxHeaderBytes: 1 << 20, // 1 MB
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
+	for n := 0; n < 10; n++ {
+		key := users[rand.Intn(len(users))]
+		data := items[rand.Intn(len(items))]
+		p.Produce(&kafka.Message{
+			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
+			Key:            []byte(key),
+			Value:          []byte(data),
+		}, nil)
 	}
+
+	// Wait for all messages to be delivered
+	p.Flush(15 * 1000)
+	p.Close()
 
 	// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 	// 	log.Println("hello world")
 	// })
 
-	mux.GET("/", func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "pong",
-		})
-	})
-
-	httpServer.ListenAndServe()
-
-	// Wait for all messages to be delivered
-	p.Flush(15 * 1000)
-	p.Close()
+	// http.ListenAndServe(":8090", nil)
 }
