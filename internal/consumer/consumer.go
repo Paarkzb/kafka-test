@@ -12,7 +12,7 @@ import (
 
 func main() {
 	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": "micro-kafka:9092",
+		"bootstrap.servers": os.Getenv("BOOTSTRAP_SERVERS"),
 		"group.id":          "kafka-go-getting-started",
 		"auto.offset.reset": "earliest",
 	})
@@ -21,6 +21,7 @@ func main() {
 		log.Printf("Failed to create consumer: %s", err)
 		os.Exit(1)
 	}
+	log.Println("Consumer created")
 
 	topic := "purchases"
 	err = c.SubscribeTopics([]string{topic}, nil)
