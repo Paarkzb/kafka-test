@@ -3,18 +3,19 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/sirupsen/logrus"
 )
 
 type SomeData struct {
-	User string `json:"user"`
-	Item string `json:"item"`
+	Purchaser string `json:"purchaser"`
+	Item      string `json:"item"`
 }
 
 type errorResponse struct {
@@ -26,18 +27,22 @@ type statusResponse struct {
 }
 
 func newErrorResponse(c *gin.Context, statusCode int, message string) {
-	// logrus.Error(message)
+	logrus.Error(message)
 	c.AbortWithStatusJSON(statusCode, errorResponse{Message: message})
 }
 
 func main() {
+
+	logrus.SetFormatter(new(logrus.JSONFormatter))
+
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
 		"bootstrap.servers": os.Getenv("BOOTSTRAP_SERVERS"),
 		"acks":              "all",
 	})
+	defer p.Close()
 
 	if err != nil {
-		log.Printf("Failed to create producer: %s", err)
+		logrus.Errorf("Failed to create producer: %s", err)
 		os.Exit(1)
 	}
 
@@ -47,9 +52,9 @@ func main() {
 			switch ev := e.(type) {
 			case *kafka.Message:
 				if ev.TopicPartition.Error != nil {
-					log.Printf("Failed to deliver message: %v\n", ev.TopicPartition)
+					logrus.Infof("Failed to deliver message: %v\n", ev.TopicPartition)
 				} else {
-					log.Printf("Produced event to topic %s: key = %-10s value = %s\n", *ev.TopicPartition.Topic, string(ev.Key), string(ev.Value))
+					logrus.Infof("Produced event to topic %s: key = %-10s value = %s\n", *ev.TopicPartition.Topic, string(ev.Key), string(ev.Value))
 				}
 			}
 		}
@@ -69,17 +74,24 @@ func main() {
 	// 	}, nil)
 	// }
 
-	pool, err := pgxpool.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	pool, err := pgxpool.New(context.Background(),
+		fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+			os.Getenv("PGUSER"),
+			os.Getenv("PGPASSWORD"),
+			os.Getenv("PGHOST"),
+			os.Getenv("PGPORT"),
+			os.Getenv("PGDATABASE"),
+			os.Getenv("PGSSLMODE")))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		logrus.Errorf("Unable to connect to database: %v\n", err)
 		os.Exit(1)
 	}
-	defer pool.Close(context.Background())
+	defer pool.Close()
 
 	mux := gin.Default()
 
 	httpServer := &http.Server{
-		Addr:           ":8090",
+		Addr:           ":" + os.Getenv("MICRO_SERVER_PORT"),
 		Handler:        mux,
 		MaxHeaderBytes: 1 << 20, // 1 MB
 		ReadTimeout:    10 * time.Second,
@@ -115,14 +127,28 @@ func main() {
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
-			"message": "OK",
+		// insert into db
+		query := "insert into public.purchases(purchaser, item) values ($1, $2)"
+
+		var purchaserId int32
+		_, err = pool.Query(context.Background(), query, input.Purchaser, input.Item)
+		if err != nil {
+			newErrorResponse(c, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		// add to kafka
+
+		c.JSON(http.StatusCreated, gin.H{
+			"id": purchaserId,
 		})
 	})
 
-	httpServer.ListenAndServe()
+	if err = httpServer.ListenAndServe(); err != nil {
+		logrus.Fatalf("error occured while running http server: %s", err.Error())
+	}
 
-	// Wait for all messages to be delivered
-	p.Flush(15 * 1000)
-	p.Close()
+	logrus.Infof("Server listening on port %s", os.Getenv("MICRO_SERVER_PORT"))
+	logrus.Info("Server started")
+
 }

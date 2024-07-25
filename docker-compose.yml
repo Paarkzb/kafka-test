@@ -61,7 +61,9 @@ services:
       - PGHOST=${PGHOST:-micro-postgres}
       - PGPORT=${PGPORT:-5490}
       - PGDATABASE=${PGDATABASE:-postgres}
+      - PGSSLMODE=${PGSSLMODE:-disable}
       - BOOTSTRAP_SERVERS=${BOOTSTRAP_SERVERS:-micro-kafka:9090}
+      - MICRO_SERVER_PORT=${MICRO_SERVER_PORT:-8090}
     deploy:
       restart_policy:
         condition: on-failure
@@ -72,8 +74,6 @@ services:
     hostname: micro-consumer
     networks:
       - micro-net
-    ports:
-      - "8091:8091"
     volumes:
       - micro-consumer-volume:/app
     environment:
