@@ -1,8 +1,9 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -10,6 +11,24 @@ import (
 	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/gin-gonic/gin"
 )
+
+type SomeData struct {
+	User string `json:"user"`
+	Item string `json:"item"`
+}
+
+type errorResponse struct {
+	Message string `json:"message"`
+}
+
+type statusResponse struct {
+	Status string `json:"status"`
+}
+
+func newErrorResponse(c *gin.Context, statusCode int, message string) {
+	// logrus.Error(message)
+	c.AbortWithStatusJSON(statusCode, errorResponse{Message: message})
+}
 
 func main() {
 	p, err := kafka.NewProducer(&kafka.ConfigMap{
@@ -36,20 +55,6 @@ func main() {
 		}
 	}()
 
-	users := [...]string{"eabara", "jsmith", "sgarcia", "jbernard", "htanaka", "awalther"}
-	items := [...]string{"book", "alarm clock", "t-shirts", "gift card", "batteries"}
-	topic := "purchases"
-
-	for n := 0; n < 10; n++ {
-		key := users[rand.Intn(len(users))]
-		data := items[rand.Intn(len(items))]
-		p.Produce(&kafka.Message{
-			TopicPartition: kafka.TopicPartition{Topic: &topic, Partition: kafka.PartitionAny},
-			Key:            []byte(key),
-			Value:          []byte(data),
-		}, nil)
-	}
-
 	// users := [...]string{"eabara", "jsmith", "sgarcia", "jbernard", "htanaka", "awalther"}
 	// items := [...]string{"book", "alarm clock", "t-shirts", "gift card", "batteries"}
 	// topic := "purchases"
@@ -64,6 +69,13 @@ func main() {
 	// 	}, nil)
 	// }
 
+	pool, err := pgxpool.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Unable to connect to database: %v\n", err)
+		os.Exit(1)
+	}
+	defer pool.Close(context.Background())
+
 	mux := gin.Default()
 
 	httpServer := &http.Server{
@@ -74,13 +86,37 @@ func main() {
 		WriteTimeout:   10 * time.Second,
 	}
 
-	// http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-	// 	log.Println("hello world")
-	// })
+	mux.Use(gin.LoggerWithFormatter(func(param gin.LogFormatterParams) string {
+		// your custom format
+		return fmt.Sprintf("%s - [%s] \"%s %s %s %d %s \"%s\" %s\"\n",
+			param.ClientIP,
+			param.TimeStamp.Format(time.RFC1123),
+			param.Method,
+			param.Path,
+			param.Request.Proto,
+			param.StatusCode,
+			param.Latency,
+			param.Request.UserAgent(),
+			param.ErrorMessage,
+		)
+	}))
 
 	mux.GET("/", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
-			"message": "pong",
+			"message": "Home",
+		})
+	})
+	mux.POST("/", func(c *gin.Context) {
+
+		var input SomeData
+		if err := c.BindJSON(&input); err != nil {
+			// logrus.Println("HERE")
+			newErrorResponse(c, http.StatusBadRequest, "binding data "+err.Error())
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "OK",
 		})
 	})
 
